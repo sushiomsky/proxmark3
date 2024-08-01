@@ -43,11 +43,14 @@ void RunMod(void) {
     Dbprintf(_YELLOW_("HF CRAFTBYTE mode started"));
     FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
 
+    // LEDs deaktivieren
+    LEDsoff();
+
     // the main loop for your standalone mode
     for (;;) {
         WDT_HIT();
 
-        // exit from RunMod,   send a usbcommand.
+        // exit from RunMod, send a usbcommand.
         if (data_available()) break;
 
         iso14a_card_select_t card;
@@ -69,12 +72,22 @@ void RunMod(void) {
                 iso14443a_setup(FPGA_HF_ISO14443A_READER_MOD);
                 if (iso14443a_select_card(NULL, &card, NULL, true, 0, true) == false) {
                     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
-                    LED_D_OFF();
                     SpinDelay(500);
                     continue;
                 } else {
                     Dbprintf("Found card with SAK: %02X, ATQA: %02X %02X, UID: ", card.sak, card.atqa[0], card.atqa[1]);
                     Dbhexdump(card.uidlen, card.uid, 0);
+
+                    // 60 Sekunden Verzögerung
+                    Dbprintf("Waiting for 60 seconds before switching to emulation mode...");
+                    for (int i = 0; i < 60; i++) {
+                        SpinDelay(1000); // 1 Sekunde Verzögerung
+                        if (data_available() || BUTTON_HELD(1000) != BUTTON_NO_CLICK) {
+                            DbpString("Operation interrupted, returning to scan mode.");
+                            break;
+                        }
+                    }
+
                     state = STATE_EMUL;
                 }
             } else if (state == STATE_EMUL) {
@@ -116,7 +129,7 @@ void RunMod(void) {
                 state = STATE_READ;
             }
         }
-        if (button_pressed  == BUTTON_HOLD)        //Holding down the button
+        if (button_pressed == BUTTON_HOLD) //Holding down the button
             break;
     }
 
